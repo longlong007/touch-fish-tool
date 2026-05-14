@@ -224,6 +224,7 @@ canvas:active {
 
 .statusbar {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   max-width: 1180px;
@@ -237,6 +238,36 @@ canvas:active {
   color: var(--muted);
   background: var(--panel);
   font-size: 13px;
+}
+
+.speed-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.speed-control span {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.speed-control input {
+  width: 140px;
+  accent-color: var(--teal);
+}
+
+.speed-control strong {
+  min-width: 28px;
+  color: var(--ink);
+  text-align: right;
 }
 
 .work-mask {

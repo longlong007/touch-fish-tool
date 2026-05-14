@@ -13,6 +13,8 @@ const cameraStatusEl = document.querySelector("#cameraStatus");
 const cameraButton = document.querySelector('[data-action="camera"]');
 const cameraCanvas = document.createElement("canvas");
 const cameraCtx = cameraCanvas.getContext("2d", { willReadFrequently: true });
+const sharkSpeedInput = document.querySelector("#sharkSpeed");
+const sharkSpeedValueEl = document.querySelector("#sharkSpeedValue");
 
 const state = {
   score: 0,
@@ -44,6 +46,7 @@ const state = {
 };
 
 const colors = ["#ffffff", "#eaf8ff", "#fff4cc", "#ffd9d4"];
+const DEFAULT_SHARK_SPEED = 65;
 
 const camera = {
   active: false,
@@ -311,6 +314,16 @@ function toggleCamera() {
     return;
   }
   startCamera();
+}
+
+function sharkSpeed() {
+  return Number(sharkSpeedInput.value) || DEFAULT_SHARK_SPEED;
+}
+
+function syncSharkSpeed() {
+  const speed = sharkSpeed();
+  state.shark.speed = speed;
+  sharkSpeedValueEl.textContent = speed.toString();
 }
 
 function spawnBubble(now) {
@@ -604,7 +617,7 @@ function resetGame() {
   state.fish.targetY = state.fish.y;
   state.shark.x = -150;
   state.shark.y = height * 0.48;
-  state.shark.speed = 64;
+  state.shark.speed = sharkSpeed();
   app.dataset.mode = "play";
   document.title = "摸鱼补给站";
   syncPanels();
@@ -646,6 +659,7 @@ document.querySelector('[data-action="pause"]').addEventListener("click", () => 
 document.querySelector('[data-action="hide"]').addEventListener("click", () => setHidden(true));
 document.querySelector('[data-action="restart"]').addEventListener("click", resetGame);
 cameraButton.addEventListener("click", toggleCamera);
+sharkSpeedInput.addEventListener("input", syncSharkSpeed);
 document.querySelector('[data-action="reveal"]').addEventListener("click", () => {
   setHidden(false);
   if (!state.gameOver) togglePause(false);
@@ -675,5 +689,6 @@ canvas.addEventListener("pointercancel", () => {
 window.addEventListener("resize", resizeCanvas);
 
 resizeCanvas();
+syncSharkSpeed();
 resetGame();
 requestAnimationFrame(loop);
