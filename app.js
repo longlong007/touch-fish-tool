@@ -45,6 +45,8 @@ const state = {
 const colors = ["#ffffff", "#eaf8ff", "#fff4cc", "#ffd9d4"];
 const DEFAULT_SHARK_SPEED = 65;
 const DEFAULT_SHARK_COUNT = 1;
+const FACE_SAMPLE_SIZE = 6;
+const FACE_ALERT_VOTES = 4;
 
 const camera = {
   active: false,
@@ -52,6 +54,8 @@ const camera = {
   mode: "off",
   stream: null,
   alertFrames: 0,
+  samples: [],
+  stableFaceCount: 0,
   timer: null,
 };
 
@@ -110,6 +114,8 @@ function stopCamera() {
   camera.mode = "off";
   camera.detector = null;
   camera.alertFrames = 0;
+  camera.samples = [];
+  camera.stableFaceCount = 0;
   if (camera.timer) {
     window.clearTimeout(camera.timer);
     camera.timer = null;
@@ -150,6 +156,8 @@ async function startCamera() {
     await cameraFeed.play();
     camera.active = true;
     camera.alertFrames = 0;
+    camera.samples = [];
+    camera.stableFaceCount = 0;
     cameraButton.classList.add("is-active");
     setCameraStatus(camera.mode === "native" ? "老板雷达扫描中" : "备用雷达扫描中");
     detectFaces();
@@ -171,16 +179,18 @@ async function detectFaces() {
         ? (await camera.detector.detect(cameraFeed)).length
         : detectSkinFaceCandidates();
 
-    if (faceCount >= 2) {
+    const stableCount = stableFaceCount(faceCount);
+
+    if (stableCount >= 2) {
       camera.alertFrames += 1;
-      setCameraStatus(`检测到 ${faceCount} 张脸，已切伪装`);
+      setCameraStatus(`稳定检测到 ${stableCount} 张脸，已切伪装`);
       if (camera.alertFrames >= 2) {
         setHidden(true);
       }
     } else {
       camera.alertFrames = 0;
       const label = camera.mode === "native" ? "老板雷达扫描中" : "备用雷达扫描中";
-      setCameraStatus(faceCount === 1 ? `${label}：1 张脸` : label);
+      setCameraStatus(stableCount === 1 ? `${label}：1 张脸` : label);
     }
   } catch (error) {
     setCameraStatus(camera.mode === "native" ? "人脸检测暂时不可用" : "备用雷达暂时不可用");
@@ -189,6 +199,40 @@ async function detectFaces() {
   if (camera.active) {
     camera.timer = window.setTimeout(detectFaces, 450);
   }
+}
+
+function stableFaceCount(rawCount) {
+  const normalizedCount = Math.min(Math.max(rawCount, 0), 4);
+  camera.samples.push(normalizedCount);
+
+  if (camera.samples.length > FACE_SAMPLE_SIZE) {
+    camera.samples.shift();
+  }
+
+  const alertVotes = camera.samples.filter((count) => count >= 2).length;
+  const calmVotes = camera.samples.filter((count) => count <= 1).length;
+
+  if (alertVotes >= FACE_ALERT_VOTES) {
+    camera.stableFaceCount = Math.max(2, modeFaceCount(camera.samples.filter((count) => count >= 2)));
+    return camera.stableFaceCount;
+  }
+
+  if (calmVotes >= FACE_ALERT_VOTES) {
+    camera.stableFaceCount = modeFaceCount(camera.samples.filter((count) => count <= 1));
+  }
+
+  return camera.stableFaceCount;
+}
+
+function modeFaceCount(samples) {
+  if (samples.length === 0) return 0;
+
+  const counts = new Map();
+  samples.forEach((count) => {
+    counts.set(count, (counts.get(count) || 0) + 1);
+  });
+
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
 }
 
 function detectSkinFaceCandidates() {
@@ -299,13 +343,14 @@ function mergeNearbyBlobs(blobs) {
       const centerY = (blob.minY + blob.maxY) / 2;
       const itemCenterX = (item.minX + item.maxX) / 2;
       const itemCenterY = (item.minY + item.maxY) / 2;
-      return Math.hypot(centerX - itemCenterX, centerY - itemCenterY) < 14;
+      return Math.hypot(centerX - itemCenterX, centerY - itemCenterY) < 20;
     });
 
     if (!overlaps) merged.push(blob);
   }
 
-  return merged.slice(0, 4);
+  const largestBlob = merged[0]?.count || 0;
+  return merged.filter((blob) => blob.count >= Math.max(34, largestBlob * 0.45)).slice(0, 4);
 }
 
 function toggleCamera() {
