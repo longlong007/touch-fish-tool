@@ -8,6 +8,11 @@ const pausePanel = document.querySelector("#pausePanel");
 const gameOverPanel = document.querySelector("#gameOverPanel");
 const finalScoreEl = document.querySelector("#finalScore");
 const pool = document.querySelector("#pool");
+const cameraFeed = document.querySelector("#cameraFeed");
+const cameraStatusEl = document.querySelector("#cameraStatus");
+const cameraButton = document.querySelector('[data-action="camera"]');
+const cameraCanvas = document.createElement("canvas");
+const cameraCtx = cameraCanvas.getContext("2d", { willReadFrequently: true });
 
 const state = {
   score: 0,
@@ -39,6 +44,15 @@ const state = {
 };
 
 const colors = ["#ffffff", "#eaf8ff", "#fff4cc", "#ffd9d4"];
+
+const camera = {
+  active: false,
+  detector: null,
+  mode: "off",
+  stream: null,
+  alertFrames: 0,
+  timer: null,
+};
 
 function resizeCanvas() {
   const rect = pool.getBoundingClientRect();
@@ -82,6 +96,221 @@ function togglePause(force) {
 function syncPanels() {
   pausePanel.classList.toggle("is-visible", state.paused && !state.hidden && !state.gameOver);
   gameOverPanel.classList.toggle("is-visible", state.gameOver && !state.hidden);
+}
+
+function setCameraStatus(text) {
+  cameraStatusEl.textContent = text;
+}
+
+function stopCamera() {
+  camera.active = false;
+  camera.mode = "off";
+  camera.detector = null;
+  camera.alertFrames = 0;
+  if (camera.timer) {
+    window.clearTimeout(camera.timer);
+    camera.timer = null;
+  }
+  if (camera.stream) {
+    camera.stream.getTracks().forEach((track) => track.stop());
+    camera.stream = null;
+  }
+  cameraFeed.srcObject = null;
+  cameraButton.classList.remove("is-active");
+  setCameraStatus("老板雷达未开启");
+}
+
+async function startCamera() {
+  if (!("mediaDevices" in navigator) || !navigator.mediaDevices.getUserMedia) {
+    setCameraStatus("当前浏览器不支持摄像头");
+    return;
+  }
+
+  try {
+    if ("FaceDetector" in window) {
+      camera.detector = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 4 });
+      camera.mode = "native";
+    } else {
+      camera.detector = null;
+      camera.mode = "skin";
+    }
+
+    camera.stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: "user",
+        width: { ideal: 640 },
+        height: { ideal: 360 },
+      },
+      audio: false,
+    });
+    cameraFeed.srcObject = camera.stream;
+    await cameraFeed.play();
+    camera.active = true;
+    camera.alertFrames = 0;
+    cameraButton.classList.add("is-active");
+    setCameraStatus(camera.mode === "native" ? "老板雷达扫描中" : "备用雷达扫描中");
+    detectFaces();
+  } catch (error) {
+    stopCamera();
+    setCameraStatus(error.name === "NotAllowedError" ? "摄像头权限未开启" : "老板雷达启动失败");
+  }
+}
+
+async function detectFaces() {
+  if (!camera.active || cameraFeed.readyState < 2) {
+    if (camera.active) camera.timer = window.setTimeout(detectFaces, 450);
+    return;
+  }
+
+  try {
+    const faceCount =
+      camera.mode === "native" && camera.detector
+        ? (await camera.detector.detect(cameraFeed)).length
+        : detectSkinFaceCandidates();
+
+    if (faceCount >= 2) {
+      camera.alertFrames += 1;
+      setCameraStatus(`检测到 ${faceCount} 张脸，已切伪装`);
+      if (camera.alertFrames >= 2) {
+        setHidden(true);
+      }
+    } else {
+      camera.alertFrames = 0;
+      const label = camera.mode === "native" ? "老板雷达扫描中" : "备用雷达扫描中";
+      setCameraStatus(faceCount === 1 ? `${label}：1 张脸` : label);
+    }
+  } catch (error) {
+    setCameraStatus(camera.mode === "native" ? "人脸检测暂时不可用" : "备用雷达暂时不可用");
+  }
+
+  if (camera.active) {
+    camera.timer = window.setTimeout(detectFaces, 450);
+  }
+}
+
+function detectSkinFaceCandidates() {
+  const width = 96;
+  const height = 72;
+  cameraCanvas.width = width;
+  cameraCanvas.height = height;
+  cameraCtx.drawImage(cameraFeed, 0, 0, width, height);
+
+  const image = cameraCtx.getImageData(0, 0, width, height);
+  const pixels = image.data;
+  const skin = new Uint8Array(width * height);
+
+  for (let index = 0; index < pixels.length; index += 4) {
+    const r = pixels[index];
+    const g = pixels[index + 1];
+    const b = pixels[index + 2];
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const isSkin =
+      r > 58 &&
+      g > 34 &&
+      b > 22 &&
+      max - min > 14 &&
+      Math.abs(r - g) > 8 &&
+      r > g &&
+      r > b &&
+      r / (g + 1) < 1.85;
+
+    if (isSkin) skin[index / 4] = 1;
+  }
+
+  return countFaceLikeBlobs(skin, width, height);
+}
+
+function countFaceLikeBlobs(mask, width, height) {
+  const visited = new Uint8Array(mask.length);
+  const candidates = [];
+  const queue = [];
+
+  for (let start = 0; start < mask.length; start += 1) {
+    if (!mask[start] || visited[start]) continue;
+
+    let head = 0;
+    let count = 0;
+    let minX = width;
+    let maxX = 0;
+    let minY = height;
+    let maxY = 0;
+    queue.length = 0;
+    queue.push(start);
+    visited[start] = 1;
+
+    while (head < queue.length) {
+      const current = queue[head];
+      head += 1;
+      count += 1;
+
+      const x = current % width;
+      const y = Math.floor(current / width);
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+
+      const neighbors = [current - 1, current + 1, current - width, current + width];
+      for (const next of neighbors) {
+        if (
+          next >= 0 &&
+          next < mask.length &&
+          !visited[next] &&
+          mask[next] &&
+          Math.abs((next % width) - x) <= 1
+        ) {
+          visited[next] = 1;
+          queue.push(next);
+        }
+      }
+    }
+
+    const blobWidth = maxX - minX + 1;
+    const blobHeight = maxY - minY + 1;
+    const area = blobWidth * blobHeight;
+    const fillRatio = count / area;
+    const aspectRatio = blobWidth / blobHeight;
+
+    if (
+      count >= 34 &&
+      blobWidth >= 6 &&
+      blobHeight >= 7 &&
+      aspectRatio >= 0.45 &&
+      aspectRatio <= 1.75 &&
+      fillRatio >= 0.22
+    ) {
+      candidates.push({ count, minX, maxX, minY, maxY });
+    }
+  }
+
+  return mergeNearbyBlobs(candidates).length;
+}
+
+function mergeNearbyBlobs(blobs) {
+  const merged = [];
+
+  for (const blob of blobs.sort((a, b) => b.count - a.count)) {
+    const overlaps = merged.some((item) => {
+      const centerX = (blob.minX + blob.maxX) / 2;
+      const centerY = (blob.minY + blob.maxY) / 2;
+      const itemCenterX = (item.minX + item.maxX) / 2;
+      const itemCenterY = (item.minY + item.maxY) / 2;
+      return Math.hypot(centerX - itemCenterX, centerY - itemCenterY) < 14;
+    });
+
+    if (!overlaps) merged.push(blob);
+  }
+
+  return merged.slice(0, 4);
+}
+
+function toggleCamera() {
+  if (camera.active) {
+    stopCamera();
+    return;
+  }
+  startCamera();
 }
 
 function spawnBubble(now) {
@@ -416,10 +645,13 @@ document.addEventListener("keydown", (event) => {
 document.querySelector('[data-action="pause"]').addEventListener("click", () => togglePause());
 document.querySelector('[data-action="hide"]').addEventListener("click", () => setHidden(true));
 document.querySelector('[data-action="restart"]').addEventListener("click", resetGame);
+cameraButton.addEventListener("click", toggleCamera);
 document.querySelector('[data-action="reveal"]').addEventListener("click", () => {
   setHidden(false);
   if (!state.gameOver) togglePause(false);
 });
+
+window.addEventListener("beforeunload", stopCamera);
 
 canvas.addEventListener("pointerdown", (event) => {
   state.dragging = true;

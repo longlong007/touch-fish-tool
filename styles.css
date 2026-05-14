@@ -112,6 +112,12 @@ h1 {
   outline: none;
 }
 
+.icon-button.is-active {
+  border-color: var(--teal);
+  color: white;
+  background: var(--teal);
+}
+
 .hud {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -164,6 +170,14 @@ canvas {
 
 canvas:active {
   cursor: grabbing;
+}
+
+.camera-feed {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .pause-panel,

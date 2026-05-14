@@ -69,6 +69,10 @@
             <h1>摸鱼补给站</h1>
           </div>
           <div class="game-actions">
+            <button type="button" class="icon-button" data-action="camera" title="老板雷达">
+              <span aria-hidden="true">◎</span>
+              <span class="sr-only">老板雷达</span>
+            </button>
             <button type="button" class="icon-button" data-action="pause" title="暂停 / 继续">
               <span aria-hidden="true">⏯</span>
               <span class="sr-only">暂停 / 继续</span>
@@ -96,6 +100,7 @@
         </div>
 
         <div class="pool" id="pool">
+          <video class="camera-feed" id="cameraFeed" autoplay muted playsinline aria-hidden="true"></video>
           <canvas id="game" width="960" height="560" aria-label="摸鱼游戏画布"></canvas>
           <div class="pause-panel" id="pausePanel">
             <strong>已暂停</strong>
@@ -114,6 +119,7 @@
           <span>Space 暂停</span>
           <span>Esc 隐藏</span>
           <span>Alt + H 最小化伪装</span>
+          <span id="cameraStatus">老板雷达未开启</span>
         </footer>
       </section>
     </main>
