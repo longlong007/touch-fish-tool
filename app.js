@@ -15,6 +15,8 @@ const cameraCanvas = document.createElement("canvas");
 const cameraCtx = cameraCanvas.getContext("2d", { willReadFrequently: true });
 const sharkSpeedInput = document.querySelector("#sharkSpeed");
 const sharkSpeedValueEl = document.querySelector("#sharkSpeedValue");
+const sharkCountInput = document.querySelector("#sharkCount");
+const sharkCountValueEl = document.querySelector("#sharkCountValue");
 
 const state = {
   score: 0,
@@ -37,16 +39,12 @@ const state = {
     targetY: canvas.height * 0.55,
     angle: 0,
   },
-  shark: {
-    x: -180,
-    y: canvas.height * 0.48,
-    angle: 0,
-    speed: 64,
-  },
+  sharks: [],
 };
 
 const colors = ["#ffffff", "#eaf8ff", "#fff4cc", "#ffd9d4"];
 const DEFAULT_SHARK_SPEED = 65;
+const DEFAULT_SHARK_COUNT = 1;
 
 const camera = {
   active: false,
@@ -69,8 +67,10 @@ function resizeCanvas() {
   state.fish.y = Math.min(Math.max(state.fish.y, 45), height - 45);
   state.fish.targetX = Math.min(Math.max(state.fish.targetX, 80), width - 60);
   state.fish.targetY = Math.min(Math.max(state.fish.targetY, 45), height - 45);
-  state.shark.x = Math.min(state.shark.x, width + 160);
-  state.shark.y = Math.min(Math.max(state.shark.y, 70), height - 70);
+  state.sharks.forEach((shark) => {
+    shark.x = Math.min(shark.x, width + 160);
+    shark.y = Math.min(Math.max(shark.y, 70), height - 70);
+  });
 }
 
 function logicalSize() {
@@ -320,10 +320,45 @@ function sharkSpeed() {
   return Number(sharkSpeedInput.value) || DEFAULT_SHARK_SPEED;
 }
 
+function sharkCount() {
+  return Number(sharkCountInput.value) || 0;
+}
+
 function syncSharkSpeed() {
   const speed = sharkSpeed();
-  state.shark.speed = speed;
+  state.sharks.forEach((shark) => {
+    shark.speed = speed;
+  });
   sharkSpeedValueEl.textContent = speed.toString();
+}
+
+function syncSharkCount() {
+  const count = sharkCount();
+  const { width, height } = logicalSize();
+  const previousCount = state.sharks.length;
+
+  if (count < previousCount) {
+    state.sharks = state.sharks.slice(0, count);
+  }
+
+  while (state.sharks.length < count) {
+    state.sharks.push(createShark(state.sharks.length, width, height));
+  }
+
+  sharkCountValueEl.textContent = count.toString();
+  syncSharkSpeed();
+  syncHud();
+}
+
+function createShark(index, width, height) {
+  return {
+    x: -150 - index * 110,
+    y: height * (0.34 + index * 0.16),
+    angle: 0,
+    speed: sharkSpeed(),
+    offset: index * 1.4,
+    biteRadius: 72,
+  };
 }
 
 function spawnBubble(now) {
@@ -531,7 +566,9 @@ function update(delta, now) {
     if (distance < bubble.r + 38) {
       state.combo += 1;
       state.score += 10 + Math.min(state.combo, 12) * 2;
-      state.shark.x -= Math.min(18 + state.combo, 42);
+      state.sharks.forEach((shark) => {
+        shark.x -= Math.min(18 + state.combo, 42);
+      });
       state.ripples.push({ x: bubble.x, y: bubble.y, r: bubble.r, life: 1 });
       return false;
     }
@@ -551,18 +588,20 @@ function update(delta, now) {
     return obstacle.x + obstacle.r > -20;
   });
 
-  const shark = state.shark;
-  const chaseDx = fish.x - shark.x;
-  const chaseDy = fish.y - shark.y;
-  const chaseDistance = Math.hypot(chaseDx, chaseDy) || 1;
-  const pressure = 1 + Math.min(state.score / 900, 0.85);
-  shark.x += (chaseDx / chaseDistance) * shark.speed * pressure * delta;
-  shark.y += (chaseDy / chaseDistance) * shark.speed * pressure * delta;
-  shark.angle = Math.atan2(chaseDy, chaseDx) * 0.22;
+  state.sharks.forEach((shark, index) => {
+    const targetY = fish.y + Math.sin(now / 520 + shark.offset) * (18 + index * 6);
+    const chaseDx = fish.x - shark.x;
+    const chaseDy = targetY - shark.y;
+    const chaseDistance = Math.hypot(chaseDx, chaseDy) || 1;
+    const pressure = 1 + Math.min(state.score / 900, 0.85);
+    shark.x += (chaseDx / chaseDistance) * shark.speed * pressure * delta;
+    shark.y += (chaseDy / chaseDistance) * shark.speed * pressure * delta;
+    shark.angle = Math.atan2(chaseDy, chaseDx) * 0.22;
 
-  if (Math.hypot(shark.x - fish.x, shark.y - fish.y) < 72) {
-    endGame();
-  }
+    if (Math.hypot(shark.x - fish.x, shark.y - fish.y) < shark.biteRadius) {
+      endGame();
+    }
+  });
 
   state.ripples = state.ripples.filter((ripple) => {
     ripple.r += 70 * delta;
@@ -578,15 +617,23 @@ function render(now) {
   state.bubbles.forEach(drawBubble);
   state.obstacles.forEach(drawObstacle);
   state.ripples.forEach(drawRipple);
-  drawShark(state.shark);
+  state.sharks.forEach(drawShark);
   drawFish(state.fish);
 }
 
 function syncHud() {
   scoreEl.textContent = state.score.toString();
   comboEl.textContent = state.combo.toString();
-  const distance = Math.max(0, Math.round(Math.hypot(state.shark.x - state.fish.x, state.shark.y - state.fish.y) - 72));
-  timerEl.textContent = `${distance}m`;
+  if (state.sharks.length === 0) {
+    timerEl.textContent = "安全";
+    return;
+  }
+
+  const nearestDistance = state.sharks.reduce((nearest, shark) => {
+    const distance = Math.hypot(shark.x - state.fish.x, shark.y - state.fish.y) - shark.biteRadius;
+    return Math.min(nearest, distance);
+  }, Number.POSITIVE_INFINITY);
+  timerEl.textContent = `${Math.max(0, Math.round(nearestDistance))}m`;
 }
 
 function endGame() {
@@ -615,9 +662,7 @@ function resetGame() {
   state.fish.y = height * 0.52;
   state.fish.targetX = state.fish.x;
   state.fish.targetY = state.fish.y;
-  state.shark.x = -150;
-  state.shark.y = height * 0.48;
-  state.shark.speed = sharkSpeed();
+  state.sharks = Array.from({ length: sharkCount() }, (_, index) => createShark(index, width, height));
   app.dataset.mode = "play";
   document.title = "摸鱼补给站";
   syncPanels();
@@ -660,6 +705,7 @@ document.querySelector('[data-action="hide"]').addEventListener("click", () => s
 document.querySelector('[data-action="restart"]').addEventListener("click", resetGame);
 cameraButton.addEventListener("click", toggleCamera);
 sharkSpeedInput.addEventListener("input", syncSharkSpeed);
+sharkCountInput.addEventListener("input", syncSharkCount);
 document.querySelector('[data-action="reveal"]').addEventListener("click", () => {
   setHidden(false);
   if (!state.gameOver) togglePause(false);
