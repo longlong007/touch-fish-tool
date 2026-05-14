@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Q2 工作流看板</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app" data-mode="play">
+      <section class="work-mask" aria-label="工作看板">
+        <header class="mask-topbar">
+          <div>
+            <p class="eyebrow">Q2 Operations</p>
+            <h1>工作流看板</h1>
+          </div>
+          <div class="mask-actions">
+            <button type="button" class="icon-button" data-action="reveal" title="继续">
+              <span aria-hidden="true">↩</span>
+              <span class="sr-only">继续</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="metrics">
+          <article>
+            <span>本周完成率</span>
+            <strong>86%</strong>
+            <small>较上周 +7%</small>
+          </article>
+          <article>
+            <span>待处理事项</span>
+            <strong>14</strong>
+            <small>高优先级 3</small>
+          </article>
+          <article>
+            <span>同步会议</span>
+            <strong>09:30</strong>
+            <small>准备中</small>
+          </article>
+        </div>
+
+        <div class="board">
+          <section>
+            <h2>待办</h2>
+            <p>整理日报指标口径</p>
+            <p>补充风险同步材料</p>
+            <p>确认联调排期</p>
+          </section>
+          <section>
+            <h2>进行中</h2>
+            <p>优化交付检查表</p>
+            <p>跟进资源确认</p>
+            <p>汇总数据看板备注</p>
+          </section>
+          <section>
+            <h2>已完成</h2>
+            <p>更新项目状态</p>
+            <p>归档会议纪要</p>
+            <p>同步客户反馈</p>
+          </section>
+        </div>
+      </section>
+
+      <section class="playground" aria-label="摸鱼小工具">
+        <header class="game-header">
+          <div>
+            <p class="eyebrow">Touch Fish Tool</p>
+            <h1>摸鱼补给站</h1>
+          </div>
+          <div class="game-actions">
+            <button type="button" class="icon-button" data-action="pause" title="暂停 / 继续">
+              <span aria-hidden="true">⏯</span>
+              <span class="sr-only">暂停 / 继续</span>
+            </button>
+            <button type="button" class="icon-button" data-action="hide" title="隐藏">
+              <span aria-hidden="true">⌘</span>
+              <span class="sr-only">隐藏</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="hud">
+          <div>
+            <span>摸鱼值</span>
+            <strong id="score">0</strong>
+          </div>
+          <div>
+            <span>连击</span>
+            <strong id="combo">0</strong>
+          </div>
+          <div>
+            <span>危险距离</span>
+            <strong id="timer">03:00</strong>
+          </div>
+        </div>
+
+        <div class="pool" id="pool">
+          <canvas id="game" width="960" height="560" aria-label="摸鱼游戏画布"></canvas>
+          <div class="pause-panel" id="pausePanel">
+            <strong>已暂停</strong>
+            <span>按空格继续，按 Esc 快速隐藏</span>
+          </div>
+          <div class="game-over-panel" id="gameOverPanel">
+            <strong>被鲨鱼抓包了</strong>
+            <span id="finalScore">本局摸鱼值 0</span>
+            <button type="button" data-action="restart">重新摸鱼</button>
+          </div>
+        </div>
+
+        <footer class="statusbar">
+          <span>拖动小鱼躲鲨鱼</span>
+          <span>撞障碍会减速</span>
+          <span>Space 暂停</span>
+          <span>Esc 隐藏</span>
+          <span>Alt + H 最小化伪装</span>
+        </footer>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
